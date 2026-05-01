@@ -1,46 +1,115 @@
 name: Build Windows
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+
+env:
+  PROJECT_SUBDIR: LibreSprite_2.0_A_STUDI0/LibreSprite-master
+  BUILD_TYPE: Release
+  VCPKG_TRIPLET: x64-windows-static
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: recursive
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-    - name: Setup CMake
-      uses: jwlawson/actions-setup-cmake@v2
-      with:
-        cmake-version: '4.0.0'
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: "3.28.0"
 
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
 
-    - name: Install dependencies
-      run: |
-        vcpkg install zlib libpng libjpeg-turbo freetype sdl2 libarchive pixman giflib tinyxml2 curl harfbuzz --triplet x64-windows
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            C:/vcpkg/installed
+            C:/vcpkg/packages
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
 
-    - name: Configure
-      run: |
-        cd LibreSprite_2.0_A_STUDI0/LibreSprite-master
-        cmake -B build -G "Visual Studio 17 2022" -A x64 `
-          -DCMAKE_BUILD_TYPE=Release `
-          -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake `
-          -DVCPKG_TARGET_TRIPLET=x64-windows
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          vcpkg install `
+            tinyxml2:$env:VCPKG_TRIPLET `
+            zlib:$env:VCPKG_TRIPLET `
+            libarchive:$env:VCPKG_TRIPLET `
+            libpng:$env:VCPKG_TRIPLET `
+            pixman:$env:VCPKG_TRIPLET `
+            freetype:$env:VCPKG_TRIPLET `
+            giflib:$env:VCPKG_TRIPLET `
+            libjpeg-turbo:$env:VCPKG_TRIPLET `
+            curl:$env:VCPKG_TRIPLET `
+            sdl2:$env:VCPKG_TRIPLET `
+            sdl2-image:$env:VCPKG_TRIPLET `
+            libwebp:$env:VCPKG_TRIPLET `
+            pkgconf:$env:VCPKG_TRIPLET
 
-    - name: Build
-      run: |
-        cd LibreSprite_2.0_A_STUDI0/LibreSprite-master
-        cmake --build build --config Release --parallel
+      - name: Resolve project paths
+        shell: pwsh
+        run: |
+          $projectDir = Join-Path $env:GITHUB_WORKSPACE $env:PROJECT_SUBDIR
+          if (-not (Test-Path $projectDir)) {
+            $projectDir = $env:GITHUB_WORKSPACE
+          }
+          $buildDir = Join-Path $env:GITHUB_WORKSPACE "build-windows"
+          $artifactDir = Join-Path $env:GITHUB_WORKSPACE "artifact-windows"
+          "PROJECT_DIR=$projectDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "BUILD_DIR=$buildDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ARTIFACT_DIR=$artifactDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: LibreSprite-2.0-Windows
-        path: LibreSprite_2.0_A_STUDI0/LibreSprite-master/build/Release/
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S "$env:PROJECT_DIR" -B "$env:BUILD_DIR" `
+            -A x64 `
+            -DCMAKE_BUILD_TYPE=$env:BUILD_TYPE `
+            -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=$env:VCPKG_TRIPLET `
+            -DUSE_V8_SANDBOX=OFF `
+            -DWITH_DESKTOP_INTEGRATION=OFF `
+            -DWITH_QT_THUMBNAILER=OFF `
+            -DENABLE_TESTS=OFF
+
+      - name: Build
+        shell: pwsh
+        run: |
+          cmake --build "$env:BUILD_DIR" --config $env:BUILD_TYPE --parallel
+
+      - name: Prepare artifact
+        shell: pwsh
+        run: |
+          Remove-Item "$env:ARTIFACT_DIR" -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path "$env:ARTIFACT_DIR" | Out-Null
+          $binDir = Join-Path $env:BUILD_DIR "bin"
+          $exePath = Join-Path $binDir "libresprite.exe"
+          $dataPath = Join-Path $env:PROJECT_DIR "data"
+          if (-not (Test-Path $exePath)) {
+            $exePath = Get-ChildItem -Path $env:BUILD_DIR -Filter "*.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          }
+          Copy-Item $exePath "$env:ARTIFACT_DIR\"
+          Get-ChildItem $binDir -Filter *.dll -ErrorAction SilentlyContinue | ForEach-Object {
+            Copy-Item $_.FullName "$env:ARTIFACT_DIR\"
+          }
+          Copy-Item $dataPath "$env:ARTIFACT_DIR\data" -Recurse
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LibreSprite-2.0-Windows
+          path: artifact-windows
+          if-no-files-found: error
