@@ -52,3 +52,4 @@ jobs:
       with:
         name: LibreSprite-2.0-Windows
         path: LibreSprite_2.0_A_STUDI0/LibreSprite-master/build/bin/
+        
