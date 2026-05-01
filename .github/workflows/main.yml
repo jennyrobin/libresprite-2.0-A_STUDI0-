@@ -3,113 +3,52 @@ name: Build Windows
 on:
   workflow_dispatch:
   push:
-    branches:
-      - master
-      - main
+    branches: [ main, master ]
   pull_request:
 
-env:
-  PROJECT_SUBDIR: LibreSprite_2.0_A_STUDI0/LibreSprite-master
-  BUILD_TYPE: Release
-  VCPKG_TRIPLET: x64-windows
-
 jobs:
-  build-windows:
+  build:
     runs-on: windows-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+    - uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        release: false
+        update: false
+        install: >-
+          base-devel
+          git
+          mingw-w64-x86_64-nodejs
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-make
+          mingw-w64-x86_64-curl
+          mingw-w64-x86_64-freetype
+          mingw-w64-x86_64-giflib
+          mingw-w64-x86_64-libjpeg-turbo
+          mingw-w64-x86_64-libpng
+          mingw-w64-x86_64-libwebp
+          mingw-w64-x86_64-pixman
+          mingw-w64-x86_64-SDL2
+          mingw-w64-x86_64-SDL2_image
+          mingw-w64-x86_64-tinyxml2
+          mingw-w64-x86_64-zlib
+          mingw-w64-x86_64-libarchive
 
-      - name: Setup CMake
-        uses: jwlawson/actions-setup-cmake@v2
-        with:
-          cmake-version: "3.28.0"
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'true'
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+    - shell: msys2 {0}
+      run: |
+        cd LibreSprite_2.0_A_STUDI0/LibreSprite-master
+        mkdir build
+        cd build
+        cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DUSE_V8_SANDBOX=OFF ..
+        make -j 4
 
-      - name: Cache vcpkg
-        uses: actions/cache@v4
-        with:
-          path: |
-            C:/vcpkg/installed
-            C:/vcpkg/packages
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}
-          restore-keys: |
-            vcpkg-${{ runner.os }}-
-
-      - name: Install dependencies
-        shell: pwsh
-        run: |
-          vcpkg install `
-            tinyxml2:$env:VCPKG_TRIPLET `
-            zlib:$env:VCPKG_TRIPLET `
-            libarchive:$env:VCPKG_TRIPLET `
-            libpng:$env:VCPKG_TRIPLET `
-            pixman:$env:VCPKG_TRIPLET `
-            freetype:$env:VCPKG_TRIPLET `
-            giflib:$env:VCPKG_TRIPLET `
-            libjpeg-turbo:$env:VCPKG_TRIPLET `
-            curl:$env:VCPKG_TRIPLET `
-            sdl2:$env:VCPKG_TRIPLET `
-            sdl2-image:$env:VCPKG_TRIPLET `
-            libwebp:$env:VCPKG_TRIPLET `
-            pkgconf:$env:VCPKG_TRIPLET
-
-      - name: Resolve project paths
-        shell: pwsh
-        run: |
-          $projectDir = Join-Path $env:GITHUB_WORKSPACE $env:PROJECT_SUBDIR
-          if (-not (Test-Path $projectDir)) {
-            $projectDir = $env:GITHUB_WORKSPACE
-          }
-          $buildDir = Join-Path $env:GITHUB_WORKSPACE "build-windows"
-          $artifactDir = Join-Path $env:GITHUB_WORKSPACE "artifact-windows"
-          "PROJECT_DIR=$projectDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "BUILD_DIR=$buildDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "ARTIFACT_DIR=$artifactDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Configure
-        shell: pwsh
-        run: |
-          cmake -S "$env:PROJECT_DIR" -B "$env:BUILD_DIR" `
-            -A x64 `
-            -DCMAKE_BUILD_TYPE=$env:BUILD_TYPE `
-            -DCMAKE_TOOLCHAIN_FILE="C:/vcpkg/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=$env:VCPKG_TRIPLET `
-            -DUSE_V8_SANDBOX=OFF `
-            -DWITH_DESKTOP_INTEGRATION=OFF `
-            -DWITH_QT_THUMBNAILER=OFF `
-            -DENABLE_TESTS=OFF
-
-      - name: Build
-        shell: pwsh
-        run: |
-          cmake --build "$env:BUILD_DIR" --config $env:BUILD_TYPE --parallel
-
-      - name: Prepare artifact
-        shell: pwsh
-        run: |
-          Remove-Item "$env:ARTIFACT_DIR" -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Path "$env:ARTIFACT_DIR" | Out-Null
-          $binDir = Join-Path $env:BUILD_DIR "bin"
-          $exePath = Join-Path $binDir "libresprite.exe"
-          $dataPath = Join-Path $env:PROJECT_DIR "data"
-          if (-not (Test-Path $exePath)) {
-            $exePath = Get-ChildItem -Path $env:BUILD_DIR -Filter "*.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
-          }
-          Copy-Item $exePath "$env:ARTIFACT_DIR\"
-          Get-ChildItem $binDir -Filter *.dll -ErrorAction SilentlyContinue | ForEach-Object {
-            Copy-Item $_.FullName "$env:ARTIFACT_DIR\"
-          }
-          Copy-Item $dataPath "$env:ARTIFACT_DIR\data" -Recurse
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: LibreSprite-2.0-Windows
-          path: artifact-windows
-          if-no-files-found: error
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: LibreSprite-2.0-Windows
+        path: LibreSprite_2.0_A_STUDI0/LibreSprite-master/build/bin/
