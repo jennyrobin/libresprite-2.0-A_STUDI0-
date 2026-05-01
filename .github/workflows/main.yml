@@ -1,0 +1,36 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
+        choco install ninja -y
+
+    - name: Configure
+      run: |
+        cd LibreSprite_2.0_A_STUDI0/LibreSprite-master
+        mkdir build
+        cd build
+        cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: |
+        cd LibreSprite_2.0_A_STUDI0/LibreSprite-master/build
+        ninja
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: LibreSprite-2.0-Windows
+        path: LibreSprite_2.0_A_STUDI0/LibreSprite-master/build/bin/
