@@ -11,7 +11,7 @@ on:
 env:
   PROJECT_SUBDIR: LibreSprite_2.0_A_STUDI0/LibreSprite-master
   BUILD_TYPE: Release
-  VCPKG_TRIPLET: x64-windows-static
+  VCPKG_TRIPLET: x64-windows
 
 jobs:
   build-windows:
