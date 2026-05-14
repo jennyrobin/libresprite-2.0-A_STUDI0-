@@ -205,10 +205,12 @@ public:
         return getEngine()->getScriptObject(app::current_editor ? app::current_editor->getSite().document() : nullptr);
     }).doc("read-only. Returns the currently active Document.");
 
-    addProperty("activeTool", []{
-        auto tool = App::instance() ? App::instance()->activeTool() : nullptr;
-        return tool ? tool->getId() : std::string{};
-    }).doc("read-only. Returns the selected tool id.");
+    addProperty("activeTool",
+            [this]() -> std::string {
+                auto tool = App::instance() ? App::instance()->activeTool() : nullptr;
+                return tool ? tool->getId() : std::string{};
+            }
+        ).doc("read-only. Returns the selected tool id.");
 
     addProperty("fgColor",
                 []{return makeColorValue(Preferences::instance().colorBar.fgColor());},
