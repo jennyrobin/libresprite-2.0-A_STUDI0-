@@ -11,8 +11,6 @@ jobs:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
-      with:
-        submodules: recursive
 
     - uses: msys2/setup-msys2@v2
       with:
@@ -42,6 +40,9 @@ jobs:
     - shell: msys2 {0}
       run: |
         cd LibreSprite_2.0_A_STUDI0/LibreSprite-master
+        git clone https://github.com/aseprite/flic.git src/flic
+        git clone https://github.com/aseprite/simpleini.git third_party/simpleini
+        git clone https://github.com/LibreSprite/duktape.git third_party/duktape
         mkdir build
         cd build
         cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DUSE_V8_SANDBOX=OFF ..
@@ -52,4 +53,3 @@ jobs:
       with:
         name: LibreSprite-2.0-Windows
         path: LibreSprite_2.0_A_STUDI0/LibreSprite-master/build/bin/
-        
